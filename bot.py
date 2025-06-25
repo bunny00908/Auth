@@ -8,8 +8,8 @@ from datetime import datetime
 from p import check_card  # Make sure check_card(cc_line) is in p.py
 
 # BOT Configuration
-BOT_TOKEN = '7881588527:AAHApss63yicaGs0NLA'   
-ADMIN_ID = 5248903529  # Replace with your Telegram user ID (int)
+BOT_TOKEN = '7582997295:AAEcqeqfj6w6C_lSdnUqpkox3vjUcIo2w70'   
+ADMIN_ID = 5387926427  # Replace with your Telegram user ID (int)
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
